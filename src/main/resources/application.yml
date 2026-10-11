@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: edu-rag-service
+
+server:
+  port: 8083
+
+rag:
+  embedding:
+    base-url: http://localhost:11434
+    model: bge-m3:latest
+  elasticsearch:
+    url: http://localhost:9200
+    index: rag_knowledge_vector
