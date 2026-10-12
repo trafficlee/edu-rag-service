@@ -1,0 +1,80 @@
+package com.traffic.rag.fusion;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+public class RrfFusion {
+
+    private final int rankConstant;
+
+    public RrfFusion(int rankConstant) {
+        if (rankConstant < 0) {
+            throw new IllegalArgumentException(
+                    "rankConstant 不能小于 0");
+        }
+        this.rankConstant = rankConstant;
+    }
+
+    public List<Map<String, Object>> fuse(
+            List<Map<String, Object>> bm25Results,
+            List<Map<String, Object>> knnResults,
+            int topK) {
+
+        if (topK <= 0) {
+            throw new IllegalArgumentException(
+                    "topK 必须大于 0");
+        }
+
+        Map<String, Map<String, Object>> merged =
+                new LinkedHashMap<>();
+
+        mergeOneList(merged, bm25Results);
+        mergeOneList(merged, knnResults);
+
+        List<Map<String, Object>> results =
+                new ArrayList<>(merged.values());
+
+        results.sort((a, b) -> {
+            double scoreA = (double) a.get("rrfScore");
+            double scoreB = (double) b.get("rrfScore");
+            return Double.compare(scoreB, scoreA);
+        });
+
+        return results.stream()
+                .limit(topK)
+                .toList();
+    }
+
+    private void mergeOneList(
+            Map<String, Map<String, Object>> merged,
+            List<Map<String, Object>> retrievalResults) {
+
+        for (int i = 0; i < retrievalResults.size(); i++) {
+            Map<String, Object> hit = retrievalResults.get(i);
+
+            String id = (String) hit.get("id");
+            if (id == null) {
+                continue;
+            }
+
+            int rank = i + 1;
+            double contribution =
+                    1.0 / (rankConstant + rank);
+
+            Map<String, Object> item = merged.computeIfAbsent(
+                    id, key -> {
+                        Map<String, Object> copy =
+                                new HashMap<>(hit);
+                        copy.put("rrfScore", 0.0);
+                        return copy;
+                    });
+
+            double oldScore = (double) item.get("rrfScore");
+            item.put("rrfScore", oldScore + contribution);
+        }
+    }
+}
+

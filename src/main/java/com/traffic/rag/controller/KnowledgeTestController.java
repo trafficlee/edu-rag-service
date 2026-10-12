@@ -4,6 +4,7 @@ package com.traffic.rag.controller;
 import com.traffic.rag.client.EmbeddingClient;
 import com.traffic.rag.common.ApiResponse;
 import com.traffic.rag.dto.*;
+import com.traffic.rag.fusion.RrfFusion;
 import com.traffic.rag.model.KnowledgeDocument;
 import com.traffic.rag.model.KnowledgeUpdateResult;
 import com.traffic.rag.repository.EsDocumentRepository;
@@ -50,7 +51,7 @@ public class KnowledgeTestController {
         String savedId = switch (request.mode()) {
             case CREATE -> repository.create(document);
             case UPSERT -> repository.upsert(document);
-        }; savedId = repository.save(document);
+        };
 
         KnowledgeIngestResponse data = new KnowledgeIngestResponse(
                 savedId,
@@ -150,5 +151,53 @@ public class KnowledgeTestController {
     }
 
 
+    @GetMapping("/rrf-demo")
+    public List<Map<String, Object>> rrfDemo() {
+
+        List<Map<String, Object>> bm25 = List.of(
+                Map.of("id", "A", "source", Map.of("title", "报名条件")),
+                Map.of("id", "B", "source", Map.of("title", "报名材料")),
+                Map.of("id", "C", "source", Map.of("title", "工作年限"))
+        );
+
+        List<Map<String, Object>> knn = List.of(
+                Map.of("id", "B", "source", Map.of("title", "报名材料")),
+                Map.of("id", "A", "source", Map.of("title", "报名条件")),
+                Map.of("id", "D", "source", Map.of("title", "资格审核"))
+        );
+
+        RrfFusion fusion = new RrfFusion(60);
+
+        return fusion.fuse(bm25, knn, 10);
+    }
+
+
+    @GetMapping("/rrf-test")
+    public List<Map<String, Object>> rrfTest(@RequestParam("text") String text) throws IOException {
+
+        // 1. BM25 关键词召回
+        List<Map<String, Object>> bm25Results =
+                repository.bm25Search(text, 10);
+
+        // 2. Embedding 向量化
+        List<Double> embedding = embeddingClient.embed(text);
+
+        List<Float> queryVector = embedding.stream()
+                .map(Double::floatValue)
+                .toList();
+
+        // 3. kNN 语义召回
+        List<Map<String, Object>> knnResults =
+                repository.knnSearch(queryVector, 10, 100);
+
+        // 4. RRF 排名融合
+        RrfFusion fusion = new RrfFusion(60);
+
+        return fusion.fuse(
+                bm25Results,
+                knnResults,
+                10
+        );
+    }
 
 }
