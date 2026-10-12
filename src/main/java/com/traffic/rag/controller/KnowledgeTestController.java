@@ -139,6 +139,16 @@ public class KnowledgeTestController {
         return ApiResponse.success(results);
     }
 
+    @GetMapping("/bm25-test")
+    public ApiResponse<List<Map<String, Object>>> bm25Test(
+            @RequestParam String text) throws IOException {
+
+        List<Map<String, Object>> results =
+                repository.bm25Search(text, 10);
+
+        return ApiResponse.success(results);
+    }
+
 
 
 }

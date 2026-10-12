@@ -2,6 +2,7 @@
 package com.traffic.rag.repository;
 
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
+import co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
 import co.elastic.clients.elasticsearch.core.SearchResponse;
@@ -169,6 +170,39 @@ public class EsDocumentRepository {
 
         return results;
     }
+
+
+    public List<Map<String, Object>> bm25Search(String query, int size) throws IOException {
+        SearchResponse<Map> response = client.search(
+                request -> request
+                        .index(indexName)//使用索引
+                        .size(size)//指定返回多少条候选
+                        .source(source -> source.filter(filter -> filter.includes(
+                                "chunk_id", "title", "content", "category"
+                        )))//includes 只返回业务需要的字段，不返回 1024 维 embedding，不返回 1024 维 embedding
+                        .query(queryBuilder -> queryBuilder
+                                .multiMatch(multiMatch -> multiMatch//对 title 和 content 执行全文检索
+                                        .query(query)
+                                        .fields("title^2", "content")//标题匹配权重为 2，正文权重为 1
+                                        .type(TextQueryType.BestFields)//使用 Best Fields 模式计算多字段匹配结果
+                                )
+                        ),
+                Map.class
+        );
+
+        List<Map<String, Object>> results = new ArrayList<>();
+
+        for (Hit<Map> hit : response.hits().hits()) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", hit.id());//保存 ES 文档 ID，方便后续去重与融合
+            item.put("score", hit.score());//保存 ES 返回的 BM25 相关性分数
+            item.put("source", hit.source());
+            results.add(item);
+        }
+
+        return results;
+    }
+
 
 
 
