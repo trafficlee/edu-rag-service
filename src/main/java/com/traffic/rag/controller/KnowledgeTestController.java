@@ -14,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/knowledge")
@@ -110,5 +111,34 @@ public class KnowledgeTestController {
 
         return ApiResponse.success(result);
     }
+
+
+    @GetMapping("/embedding")
+    public ApiResponse<List<Double>> getEmbedding(
+            @RequestParam String text) {
+
+        List<Double> vector = embeddingClient.embed(text);
+        return ApiResponse.success(vector);
+    }
+
+
+    @GetMapping("/knn-test")
+    public ApiResponse<List<Map<String, Object>>> knnTest(
+            @RequestParam String text
+    ) throws IOException {
+
+        List<Double> queryVector = embeddingClient.embed(text);
+
+        List<Float> floatVector = queryVector.stream()
+                .map(Double::floatValue)
+                .toList();
+
+        List<Map<String, Object>> results =
+                repository.knnSearch(floatVector, 10, 100);
+
+        return ApiResponse.success(results);
+    }
+
+
 
 }

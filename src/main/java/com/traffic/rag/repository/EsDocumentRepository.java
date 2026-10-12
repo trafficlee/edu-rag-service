@@ -4,6 +4,8 @@ package com.traffic.rag.repository;
 import co.elastic.clients.elasticsearch.ElasticsearchClient;
 import co.elastic.clients.elasticsearch.core.GetResponse;
 import co.elastic.clients.elasticsearch.core.IndexResponse;
+import co.elastic.clients.elasticsearch.core.SearchResponse;
+import co.elastic.clients.elasticsearch.core.search.Hit;
 import com.traffic.rag.common.DocumentAlreadyExistsException;
 import com.traffic.rag.common.OptimisticLockException;
 import com.traffic.rag.dto.KnowledgeQueryResponse;
@@ -14,6 +16,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -121,6 +124,52 @@ public class EsDocumentRepository {
                 response.primaryTerm()
         );
     }
+
+
+    public List<Map<String, Object>> knnSearch(
+            List<Float> queryVector,
+            int k,
+            int numCandidates
+    ) throws IOException {
+
+
+        SearchResponse<Map> response = client.search(
+                request -> request
+                        .index(indexName)
+                        .size(k)
+                        .source(source -> source.filter(filter -> filter
+                                .includes(
+                                        "chunk_id",
+                                        "title",
+                                        "content",
+                                        "category"
+                                )//_source 过滤：只决定响应中返回哪些原始文档字段。
+                        ))
+                        .knn(knn -> knn
+                                .field("embedding")
+                                .queryVector(queryVector)
+                                .k(k)
+                                .numCandidates(numCandidates)
+                        ),
+                Map.class
+        );
+
+
+        List<Map<String, Object>> results = new ArrayList<>();
+
+        for (Hit<Map> hit : response.hits().hits()) {
+            Map<String, Object> item = new HashMap<>();
+
+            item.put("id", hit.id());
+            item.put("score", hit.score());
+            item.put("source", hit.source());
+
+            results.add(item);
+        }
+
+        return results;
+    }
+
 
 
 
