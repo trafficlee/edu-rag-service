@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -199,5 +200,83 @@ public class KnowledgeTestController {
                 10
         );
     }
+
+
+    @GetMapping("/embedding-compare")
+    public ApiResponse<Map<String, Double>> embeddingCompare() {
+        String query = "一级建造师报名需要满足哪些条件";
+
+        // 文档 1：正式的报名条件文档
+        String title1 = "一级建造师考试报名条件";
+        String content1 = "报考一级建造师需要满足相应的学历、专业和工作年限要求。"
+                + "考生应根据自己的学历背景、所学专业和工作经历，核对当年度官方考试报名条件。";
+
+        // 文档 4：测试文档
+        String title4 = "测试文档";
+        String content4 = "一级建造师报名条件测试";
+
+        List<Double> queryVector = embeddingClient.embed(query);
+
+        List<Double> a1 = embeddingClient.embed(content1);
+        List<Double> b1 = embeddingClient.embed(title1 + "\n" + content1);
+
+        List<Double> a4 = embeddingClient.embed(content4);
+        List<Double> b4 = embeddingClient.embed(title4 + "\n" + content4);
+
+        Map<String, Double> result = new LinkedHashMap<>();
+        result.put("jz1_001_content_only",
+                cosineSimilarity(queryVector, a1));
+        result.put("jz1_001_title_plus_content",
+                cosineSimilarity(queryVector, b1));
+        result.put("jz1_004_content_only",
+                cosineSimilarity(queryVector, a4));
+        result.put("jz1_004_title_plus_content",
+                cosineSimilarity(queryVector, b4));
+
+        return ApiResponse.success(result);
+    }
+
+    private double cosineSimilarity(List<Double> a, List<Double> b) {
+        if (a.size() != b.size()) {
+            throw new IllegalArgumentException("向量维度不一致");
+        }
+
+        double dot = 0.0;
+        double normA = 0.0;
+        double normB = 0.0;
+
+        for (int i = 0; i < a.size(); i++) {
+            dot += a.get(i) * b.get(i);
+            normA += a.get(i) * a.get(i);
+            normB += b.get(i) * b.get(i);
+        }
+
+        if (normA == 0.0 || normB == 0.0) {
+            throw new IllegalArgumentException("向量模长不能为 0");
+        }
+
+        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
+    @GetMapping("/rrf-test-30")
+    public List<Map<String, Object>> rrfTest30(
+            @RequestParam("text") String text) throws IOException {
+
+        List<Map<String, Object>> bm25Results =
+                repository.bm25Search(text, 10);
+
+        List<Double> embedding = embeddingClient.embed(text);
+        List<Float> queryVector = embedding.stream()
+                .map(Double::floatValue)
+                .toList();
+
+        // 将向量召回候选数从 10 增加到 30
+        List<Map<String, Object>> knnResults =
+                repository.knnSearch(queryVector, 30, 100);
+
+        RrfFusion fusion = new RrfFusion(60);
+        return fusion.fuse(bm25Results, knnResults, 10);
+    }
+
 
 }
