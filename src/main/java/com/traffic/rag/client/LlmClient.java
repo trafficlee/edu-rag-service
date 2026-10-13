@@ -27,6 +27,18 @@ public class LlmClient {
     private static final String MODEL =
             "qwen3.5:2b-q4_K_M";
 
+    private static final String DEFAULT_SYSTEM_PROMPT = """
+        你是一个严谨的中文教育问答助手。请严格遵守以下规则：
+
+        1. 只能依据用户提供的参考资料回答，不得使用资料中没有的事实补全答案。
+        2. 如果问题包含多个子问题，必须逐个判断每个子问题是否有资料支持。
+        3. 对于资料明确支持的内容，直接回答。
+        4. 对于资料缺少具体数字或细节的内容，明确指出无法确认的部分。
+        5. 对于资料完全没有提供的信息，明确说明“现有资料未提供相关信息”。
+        6. 不得擅自强化资料中的结论。
+        7. 使用简体中文，回答清晰、简洁，不输出思考过程。
+        """;
+
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
 
@@ -47,7 +59,14 @@ public class LlmClient {
      */
     public String generate(String question, String context)
             throws IOException {
+        return generate(question, context, DEFAULT_SYSTEM_PROMPT);
+    }
 
+    public String generate(
+            String question,
+            String context,
+            String systemPrompt
+    ) throws IOException {
         log.info("开始生成回答，问题长度: {}, 上下文长度: {}",
                 question != null ? question.length() : 0,
                 context != null ? context.length() : 0);
@@ -61,20 +80,6 @@ public class LlmClient {
             log.error("生成失败：context 不能为空");
             throw new IllegalArgumentException("context 不能为空");
         }
-
-        String systemPrompt = """
-                你是一个严谨的中文教育问答助手。请严格遵守以下规则：
-                
-                1. 只能依据用户提供的参考资料回答，不得使用资料中没有的事实补全答案。
-                2. 如果问题包含多个子问题，必须逐个判断每个子问题是否有资料支持，不能因为其中一个子问题缺少资料，就拒绝回答其他有依据的部分。
-                3. 对于资料明确支持的内容，直接回答。
-                4. 对于资料只提供概括性信息、缺少具体数字或细节的内容，可以回答资料明确提到的部分，但必须指出哪些具体信息无法从现有资料中确认。
-                5. 对于资料完全没有提供的信息，明确说明“现有资料未提供相关信息”，不得猜测、编造或用模型自身知识补全。
-                6. 不得把“符合某项要求”擅自改写为“必须完全一致”等更强的结论。
-                7. 使用简体中文，回答清晰、简洁。只给出结论和必要说明，不输出思考过程。
-                
-                请始终区分“资料明确说明的事实”和“现有资料无法确认的信息”。
-                """;
 
         String userPrompt = """
                 请根据以下资料回答问题。
