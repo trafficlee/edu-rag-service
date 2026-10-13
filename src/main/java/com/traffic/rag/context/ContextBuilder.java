@@ -54,6 +54,21 @@ public class ContextBuilder {
                             ? castMap(sourceObject)
                             : hit;
 
+            // 正式上下文只允许已审核通过的官方或内部资料。
+            String documentType = stringValue(source.get("document_type"));
+            String reviewStatus = stringValue(source.get("review_status"));
+
+            boolean approved =
+                    "approved".equalsIgnoreCase(reviewStatus);
+
+            boolean allowedType =
+                    "official".equalsIgnoreCase(documentType)
+                            || "internal".equalsIgnoreCase(documentType);
+
+            if (!approved || !allowedType) {
+                continue;
+            }
+
             String id = stringValue(hit.get("id"));
             String title = stringValue(source.get("title"));
             String content = stringValue(source.get("content"));

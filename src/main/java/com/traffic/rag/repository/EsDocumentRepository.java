@@ -143,9 +143,11 @@ public class EsDocumentRepository {
                                         "chunk_id",
                                         "title",
                                         "content",
-                                        "category"
-                                )//_source 过滤：只决定响应中返回哪些原始文档字段。
-                        ))
+                                        "category",
+                                        "document_type",
+                                        "review_status"
+                                )
+                        ))//_source 过滤：只决定响应中返回哪些原始文档字段。
                         .knn(knn -> knn
                                 .field("embedding")
                                 .queryVector(queryVector)
@@ -178,7 +180,12 @@ public class EsDocumentRepository {
                         .index(indexName)//使用索引
                         .size(size)//指定返回多少条候选
                         .source(source -> source.filter(filter -> filter.includes(
-                                "chunk_id", "title", "content", "category"
+                                "chunk_id",
+                                "title",
+                                "content",
+                                "category",
+                                "document_type",
+                                "review_status"
                         )))//includes 只返回业务需要的字段，不返回 1024 维 embedding，不返回 1024 维 embedding
                         .query(queryBuilder -> queryBuilder
                                 .multiMatch(multiMatch -> multiMatch//对 title 和 content 执行全文检索
