@@ -12,6 +12,7 @@ import com.traffic.rag.common.OptimisticLockException;
 import com.traffic.rag.dto.KnowledgeQueryResponse;
 import com.traffic.rag.model.KnowledgeDocument;
 import com.traffic.rag.model.KnowledgeUpdateResult;
+import lombok.extern.slf4j.Slf4j;
 import org.elasticsearch.client.ResponseException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Repository;
@@ -22,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Repository
 public class EsDocumentRepository {
 
@@ -49,10 +51,14 @@ public class EsDocumentRepository {
             return response.id();
 
         } catch (ResponseException ex) {
-            if (ex.getResponse().getStatusLine().getStatusCode() == 409) {
+            int status = ex.getResponse().getStatusLine().getStatusCode();
+            if (status == 409) {
+                log.warn("文档已存在，创建冲突，chunkId: {}", document.chunkId());
                 throw new DocumentAlreadyExistsException(document.chunkId());
             }
 
+            log.error("ES 创建文档失败，chunkId: {}, 状态码: {}",
+                    document.chunkId(), status);
             throw ex;
         }
     }
@@ -86,15 +92,23 @@ public class EsDocumentRepository {
                     .ifPrimaryTerm(primaryTerm)
                     .document(toSource(document)));
 
+            log.info("乐观锁更新成功，chunkId: {}, 新 seqNo: {}, 新 primaryTerm: {}",
+                    response.id(), response.seqNo(), response.primaryTerm());
+
             return new KnowledgeUpdateResult(
                     response.id(),
                     response.seqNo(),
                     response.primaryTerm()
             );
         } catch (ResponseException ex) {
-            if (ex.getResponse().getStatusLine().getStatusCode() == 409) {
+            int status = ex.getResponse().getStatusLine().getStatusCode();
+            if (status == 409) {
+                log.warn("乐观锁冲突，chunkId: {}, 期望 seqNo: {}, primaryTerm: {}",
+                        document.chunkId(), seqNo, primaryTerm);
                 throw new OptimisticLockException(document.chunkId());
             }
+            log.error("ES 乐观锁更新失败，chunkId: {}, 状态码: {}",
+                    document.chunkId(), status);
             throw ex;
         }
     }
@@ -110,6 +124,7 @@ public class EsDocumentRepository {
         );
 
         if (!response.found()) {
+            log.info("ES 文档未找到，chunkId: {}", chunkId);
             return null;
         }
 
@@ -133,6 +148,7 @@ public class EsDocumentRepository {
             int numCandidates
     ) throws IOException {
 
+        log.info("kNN 检索开始，k: {}, numCandidates: {}", k, numCandidates);
 
         SearchResponse<Map> response = client.search(
                 request -> request
@@ -170,11 +186,14 @@ public class EsDocumentRepository {
             results.add(item);
         }
 
+        log.info("kNN 检索完成，命中数: {}", results.size());
         return results;
     }
 
 
     public List<Map<String, Object>> bm25Search(String query, int size) throws IOException {
+        log.info("BM25 检索开始，query 长度: {}, size: {}", query.length(), size);
+
         SearchResponse<Map> response = client.search(
                 request -> request
                         .index(indexName)//使用索引
@@ -207,6 +226,7 @@ public class EsDocumentRepository {
             results.add(item);
         }
 
+        log.info("BM25 检索完成，命中数: {}", results.size());
         return results;
     }
 

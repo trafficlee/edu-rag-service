@@ -6,6 +6,7 @@ import com.traffic.rag.client.RerankerClient;
 import com.traffic.rag.context.ContextBuilder;
 import com.traffic.rag.fusion.RrfFusion;
 import com.traffic.rag.repository.EsDocumentRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -16,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/rag-test")
 public class RagTestController {
@@ -45,6 +47,9 @@ public class RagTestController {
             @RequestParam(defaultValue = "5") int topK,
             @RequestParam(defaultValue = "2000") int maxChars)
             throws IOException {
+
+        log.info("RAG 问答开始，问题长度: {}, topK: {}, maxChars: {}",
+                question.length(), topK, maxChars);
 
         // 1. BM25 关键词召回
         List<Map<String, Object>> bm25Results =
@@ -82,10 +87,15 @@ public class RagTestController {
         String answer;
 
         if (context.isBlank()) {
+            log.warn("未检索到有效资料，跳过 LLM 调用，问题长度: {}", question.length());
             answer = "当前知识库没有检索到符合审核条件的有效资料，暂时无法回答。";
         } else {
             answer = llmClient.generate(question, context);
         }
+
+        log.info("RAG 问答完成，bm25: {}, knn: {}, 候选: {}, 精排: {}, 回答长度: {}",
+                bm25Results.size(), knnResults.size(), candidates.size(),
+                rerankResults.size(), answer.length());
 
         // 7. 返回答案和检索调试信息
         Map<String, Object> result = new LinkedHashMap<>();

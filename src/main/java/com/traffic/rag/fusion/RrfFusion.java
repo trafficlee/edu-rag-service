@@ -1,11 +1,14 @@
 package com.traffic.rag.fusion;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 public class RrfFusion {
 
     private final int rankConstant;
@@ -24,9 +27,13 @@ public class RrfFusion {
             int topK) {
 
         if (topK <= 0) {
+            log.warn("topK 参数非法: {}", topK);
             throw new IllegalArgumentException(
                     "topK 必须大于 0");
         }
+
+        log.info("RRF 融合开始，bm25: {}, knn: {}, topK: {}",
+                bm25Results.size(), knnResults.size(), topK);
 
         Map<String, Map<String, Object>> merged =
                 new LinkedHashMap<>();
@@ -43,9 +50,14 @@ public class RrfFusion {
             return Double.compare(scoreB, scoreA);
         });
 
-        return results.stream()
+        List<Map<String, Object>> topResults = results.stream()
                 .limit(topK)
                 .toList();
+
+        log.info("RRF 融合完成，合并后文档数: {}, 返回数: {}",
+                results.size(), topResults.size());
+
+        return topResults;
     }
 
     private void mergeOneList(

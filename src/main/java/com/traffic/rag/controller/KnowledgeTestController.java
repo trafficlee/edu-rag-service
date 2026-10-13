@@ -9,6 +9,7 @@ import com.traffic.rag.model.KnowledgeDocument;
 import com.traffic.rag.model.KnowledgeUpdateResult;
 import com.traffic.rag.repository.EsDocumentRepository;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -28,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/knowledge")
 public class KnowledgeTestController {
@@ -73,6 +75,9 @@ public class KnowledgeTestController {
             case UPSERT -> repository.upsert(document);
         };
 
+        log.info("知识写入成功，chunkId: {}, mode: {}, 向量维度: {}",
+                chunkId, request.mode(), vector.size());
+
         KnowledgeIngestResponse data = new KnowledgeIngestResponse(
                 savedId,
                 "SUCCESS",
@@ -107,6 +112,9 @@ public class KnowledgeTestController {
                 request.primaryTerm()
         );
 
+        log.info("知识乐观锁更新成功，chunkId: {}, 新 seqNo: {}, 新 primaryTerm: {}",
+                result.chunkId(), result.seqNo(), result.primaryTerm());
+
         // 4. 返回统一响应
         return ApiResponse.success(new KnowledgeUpdateResponse(
                 result.chunkId(),
@@ -124,6 +132,7 @@ public class KnowledgeTestController {
         KnowledgeQueryResponse result = repository.findById(chunkId);
 
         if (result == null) {
+            log.warn("知识切片不存在，chunkId: {}", chunkId);
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "知识切片不存在，chunkId=" + chunkId
@@ -321,6 +330,7 @@ public class KnowledgeTestController {
                 fusion.fuse(bm25Results, knnResults, 30);
 
         if (candidates.isEmpty()) {
+            log.info("RRF 融合后无候选文档，跳过重排序");
             return List.of();
         }
 
@@ -354,11 +364,14 @@ public class KnowledgeTestController {
                             StandardCharsets.UTF_8));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            log.error("调用 Reranker 服务被中断", e);
             throw new IllegalStateException(
                     "调用 Reranker 服务被中断", e);
         }
 
         if (response.statusCode() != 200) {
+            log.error("Reranker 调用失败，状态码: {}, 响应体: {}",
+                    response.statusCode(), response.body());
             throw new IllegalStateException(
                     "Reranker 调用失败，HTTP "
                             + response.statusCode()

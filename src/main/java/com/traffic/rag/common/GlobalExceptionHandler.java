@@ -30,6 +30,8 @@ public class GlobalExceptionHandler {
                 .map(error -> error.getDefaultMessage())
                 .orElse("请求参数校验失败");
 
+        log.info("请求参数校验失败: {}", message);
+
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.failure("400", message));
@@ -41,6 +43,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnreadable(
             HttpMessageNotReadableException ex) {
+
+        log.warn("请求体无法解析: {}", ex.getMessage());
 
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
@@ -65,6 +69,8 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleDocumentAlreadyExists(
             DocumentAlreadyExistsException ex) {
 
+        log.warn("文档已存在: {}", ex.getMessage());
+
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
                 .body(ApiResponse.failure("409", ex.getMessage()));
@@ -74,6 +80,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OptimisticLockException.class)
     public ResponseEntity<ApiResponse<Void>> handleOptimisticLock(
             OptimisticLockException ex) {
+
+        log.warn("乐观锁版本冲突: {}", ex.getMessage());
 
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)

@@ -1,5 +1,6 @@
 package com.traffic.rag.context;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -12,6 +13,7 @@ import java.util.Set;
 /**
  * 将 Reranker 排序后的候选文档转换为 LLM 可使用的上下文。
  */
+@Slf4j
 @Component
 public class ContextBuilder {
 
@@ -33,8 +35,12 @@ public class ContextBuilder {
         }
 
         if (maxChars <= 0) {
+            log.warn("maxChars 参数非法: {}", maxChars);
             throw new IllegalArgumentException("maxChars 必须大于 0");
         }
+
+        log.info("开始构建上下文，候选数: {}, topK: {}, maxChars: {}",
+                rerankResults.size(), topK, maxChars);
 
         List<Map<String, Object>> selectedDocuments =
                 new ArrayList<>();
@@ -66,6 +72,8 @@ public class ContextBuilder {
                             || "internal".equalsIgnoreCase(documentType);
 
             if (!approved || !allowedType) {
+                log.info("文档未通过审核或类型不符，跳过，id: {}, documentType: {}, reviewStatus: {}",
+                        stringValue(hit.get("id")), documentType, reviewStatus);
                 continue;
             }
 
@@ -93,6 +101,8 @@ public class ContextBuilder {
 
             // 第一版采用严格字符预算，不截断单篇文档。
             if (context.length() + block.length() > maxChars) {
+                log.info("字符预算已满，停止选取，已选文档数: {}, 预算: {}",
+                        selectedDocuments.size(), maxChars);
                 break;
             }
 
@@ -112,6 +122,9 @@ public class ContextBuilder {
             selectedDocuments.add(selected);
             context.append(block);
         }
+
+        log.info("上下文构建完成，选中文档数: {}, 上下文字符数: {}",
+                selectedDocuments.size(), context.length());
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("selectedDocuments", selectedDocuments);
